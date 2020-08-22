@@ -88,7 +88,7 @@ async def sign_up(request: aiohttp.web.Request):
         text = message.as_string()
         session.sendmail(SENDER_ADDRESS, email, text)
         session.quit()
-    asyncio.ensure_future(timeout(120)(send_email()))
+    asyncio.ensure_future(send_email())
     return aiohttp.web.Request(status=200)
 
 
