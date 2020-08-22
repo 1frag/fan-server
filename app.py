@@ -160,12 +160,12 @@ async def sign_in(request: aiohttp.web.Request):
         if len(res) == 1 and (id_ := res[0][0]):
             token = hashlib.sha256(os.urandom(64)).hexdigest()
             return aiohttp.web.json_response({
-                'token': await (await conn.execute('''
+                'token': (await (await conn.execute('''
                     update app_user
                     set token = %s
                     where id = %s
                     returning token;
-                ''', (token, id_))).fetchone()[0]
+                ''', (token, id_))).fetchone())[0]
             })
         elif len(res) == 1:
             return aiohttp.web.Response(status=403)
