@@ -133,9 +133,9 @@ async def sign_in(request: aiohttp.web.Request):
                 where login=%s and pwd=%s
             ''', (login, pwd))
             res = await res.fetchone()
-            if res[1] == 1:
+            if res[0] == 1:
                 return aiohttp.web.Response(status=200)
-            elif res[1] > 1:
+            elif res[0] > 1:
                 return aiohttp.web.HTTPInternalServerError()
             else:
                 return aiohttp.web.HTTPNotFound()
