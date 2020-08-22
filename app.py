@@ -230,6 +230,12 @@ async def new_ticket_handler(request: aiohttp.web.Request):
         except psycopg2.Error as e:
             if psycopg2.errors.lookup(e.pgcode).__name__ == 'UniqueViolation':
                 return aiohttp.web.Response(status=409)
+            if psycopg2.errors.lookup(e.pgcode).__name__ == 'NotNullViolation':
+                return aiohttp.web.HTTPNotFound()
+            print(psycopg2.errors.lookup(e.pgcode).__name__)
+            return aiohttp.web.HTTPInternalServerError(
+                body=psycopg2.errors.lookup(e.pgcode).__name__
+            )
     return aiohttp.web.Response(status=200)
 
 
