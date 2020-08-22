@@ -38,7 +38,7 @@ class Parser:
         return elem.text
 
 
-def read_from_request(request):
+async def read_from_request(request):
     t = await request.read()
     print(t)
     return yarl.URL(f'http://site.com/abc/?{t}').query
@@ -63,7 +63,7 @@ async def database(_):
 
 
 async def sign_up(request: aiohttp.web.Request):
-    data = read_from_request(request)
+    data = await read_from_request(request)
     login, pwd, email = data['login'], data['pwd'], data['email']
     custom_id = data['id']
     code = random.randint(10 ** 6, 10 ** 7)
@@ -93,7 +93,7 @@ async def sign_up(request: aiohttp.web.Request):
 
 
 async def auth_code_handler(request: aiohttp.web.Request):
-    data = read_from_request(request)
+    data = await read_from_request(request)
     async with db.acquire() as conn:
         res = await conn.execute('''
             select u.auth_code=%s from app_user u
