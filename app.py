@@ -138,12 +138,21 @@ async def sign_in(request: aiohttp.web.Request):
     pwd = hashlib.sha256(pwd.encode()).hexdigest()
     async with db.acquire() as conn:
         res = await conn.execute('''
-            select count(*) from app_user
+            select id, confirmed from app_user
             where login=%s and pwd=%s
         ''', (login, pwd))
-        res = await res.fetchone()
-        if res[0] == 1:
-            return aiohttp.web.Response(status=200)
+        res = await res.fetchall()
+        if len(res) == 1 and (id_ := res[0][0]):
+            token = hashlib.sha256(os.urandom(64)).hexdigest()
+            return aiohttp.web.json_response({
+                'token': await (await conn.execute('''
+                    update app_user
+                    set token = %s
+                    where id = %s
+                ''', (token, id_)))
+            })
+        elif len(res) == 1:
+            return aiohttp.web.Response(status=403)
         elif res[0] > 1:
             return aiohttp.web.HTTPInternalServerError()
         else:
