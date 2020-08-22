@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 import psycopg2
 import psycopg2.errors
 import re
+import time
 
 db: typing.Optional[aiopg.sa.engine.Engine] = None
 thread_pool: typing.Optional[concurrent.futures.ThreadPoolExecutor] = None
@@ -216,10 +217,14 @@ async def place_handler(request: aiohttp.web.Request):
     })
 
 
+def get_token(request):
+    return request.headers['Authorization'][7:]
+
+
 async def new_ticket_handler(request: aiohttp.web.Request):
     data = await read_from_request(request)
     print(request.headers, data)
-    token = request.headers['Authorization'][7:]
+    token = get_token(request)
     game, sector, row, place = data['game'], data['sector'], data['row'], data['place']
     async with db.acquire() as conn:
         try:
@@ -231,12 +236,24 @@ async def new_ticket_handler(request: aiohttp.web.Request):
             if psycopg2.errors.lookup(e.pgcode).__name__ == 'UniqueViolation':
                 return aiohttp.web.Response(status=409)
             if psycopg2.errors.lookup(e.pgcode).__name__ == 'NotNullViolation':
-                return aiohttp.web.HTTPNotFound()
+                return aiohttp.web.HTTPUnauthorized()
             print(psycopg2.errors.lookup(e.pgcode).__name__)
             return aiohttp.web.HTTPInternalServerError(
                 body=psycopg2.errors.lookup(e.pgcode).__name__
             )
     return aiohttp.web.Response(status=200)
+
+
+async def performance_handler(request: aiohttp.web.Request):
+    async with db.acquire() as conn:
+        res = await (await conn.execute('''
+            select get_user_id_by_token(%s)
+        ''', (get_token(request), ))).fetchone()
+        if not res:
+            return aiohttp.web.HTTPUnauthorized()
+    return aiohttp.web.json_response({
+        'result': [time.time() + 60, 'be happy']
+    })
 
 
 if __name__ == '__main__':
@@ -251,5 +268,6 @@ if __name__ == '__main__':
         aiohttp.web.get(r'/events/{event:\d+}', sectors_handler),
         aiohttp.web.get(r'/events/{event:\d+}/{sector:\d+}', place_handler),
         aiohttp.web.post('/ticket/new', new_ticket_handler),
+        aiohttp.web.get('/performance', performance_handler),
     ])
     aiohttp.web.run_app(app, port=os.getenv('PORT', 8000))
