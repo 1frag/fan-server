@@ -78,7 +78,7 @@ async def sign_up(request: aiohttp.web.Request):
     login, pwd, email = data['login'], data['pwd'], data['email']
     custom_id = data['id']
     pwd = hashlib.sha256(pwd.encode()).hexdigest()
-    code = random.randint(10 ** 6, 10 ** 7)
+    code = str(random.randint(10 ** 6, 10 ** 7))
     async with db.acquire() as conn:
         try:
             await conn.execute('''
@@ -97,7 +97,7 @@ async def sign_up(request: aiohttp.web.Request):
         message['To'] = email
         message['Subject'] = 'Код подтверждения'
         # The body and the attachments for the mail
-        message.attach(MIMEText('', 'plain'))
+        message.attach(MIMEText(code, 'plain'))
         # Create SMTP session for sending the mail
         session = smtplib.SMTP('smtp.gmail.com', 587)  # use gmail with port
         session.starttls()  # enable security

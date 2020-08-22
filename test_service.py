@@ -1,5 +1,6 @@
 import pytest
 import aiohttp
+import os
 
 import app
 
@@ -25,3 +26,10 @@ async def test_that_check_parsing_tickets():
     p = app.Parser(-1)
     result = list(p.parse_table(content))
     assert result == []
+
+
+async def test_sign_up():
+    print(os.popen('''
+        curl -iX POST http://i-fan.herokuapp.com/sign-up --data \
+        'email=piskunov.alesha@yandex.ru&id=1&pwd=123&login=ifrag'
+    ''').read())
