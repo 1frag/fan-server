@@ -215,6 +215,23 @@ async def place_handler(request: aiohttp.web.Request):
     })
 
 
+async def new_ticket_handler(request: aiohttp.web.Request):
+    data = await read_from_request(request)
+    print(request.headers, data)
+    token = request.headers['Authorization'][7:]
+    game, sector, row, place = data['game'], data['sector'], data['row'], data['place']
+    async with db.acquire() as conn:
+        try:
+            await conn.execute('''
+                insert into app_taken_place (user_id, game, sector, trow, place)
+                values (get_user_id_by_token(%s), %s, %s, %s, %s);
+            ''', (token, game, sector, row, place))
+        except psycopg2.Error as e:
+            if psycopg2.errors.lookup(e.pgcode).__name__ == 'UniqueViolation':
+                return aiohttp.web.Response(status=409)
+    return aiohttp.web.Response(status=200)
+
+
 if __name__ == '__main__':
     init()
     app = aiohttp.web.Application()
@@ -226,5 +243,6 @@ if __name__ == '__main__':
         aiohttp.web.get('/events', events_handler),
         aiohttp.web.get(r'/events/{event:\d+}', sectors_handler),
         aiohttp.web.get(r'/events/{event:\d+}/{sector:\d+}', place_handler),
+        aiohttp.web.post('/ticket/new', new_ticket_handler),
     ])
     aiohttp.web.run_app(app, port=os.getenv('PORT', 8000))
