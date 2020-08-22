@@ -126,7 +126,7 @@ async def sign_in(request: aiohttp.web.Request):
     data = await read_from_request(request)
     try:
         login, pwd = data['login'], data['pwd']
-        pwd = hashlib.sha256(pwd.encode())
+        pwd = hashlib.sha256(pwd.encode()).hexdigest()
         async with db.acquire() as conn:
             res = await conn.execute('''
                 select count(*) from app_user
