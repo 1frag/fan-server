@@ -253,6 +253,21 @@ async def performance_handler(request: aiohttp.web.Request):
             return aiohttp.web.HTTPUnauthorized()
     return aiohttp.web.json_response({
         'result': [time.time() + 60, 'be happy']
+    })  # statiое дата и описание
+
+
+async def whoami_handler(request: aiohttp.web.Request):
+    token = get_token(request)
+    async with db.acquire() as conn:
+        res = await (await conn.execute('''
+            select login, email from app_user
+            where token = %s
+        ''', (token, ))).fetchone()
+    if res is None:
+        return aiohttp.web.HTTPUnauthorized()
+    return aiohttp.web.json_response({
+        'email': res['email'],
+        'login': res['login'],
     })
 
 
@@ -269,5 +284,6 @@ if __name__ == '__main__':
         aiohttp.web.get(r'/events/{event:\d+}/{sector:\d+}', place_handler),
         aiohttp.web.post('/ticket/new', new_ticket_handler),
         aiohttp.web.get('/performance', performance_handler),
+        aiohttp.web.get('/whoami', whoami_handler),
     ])
     aiohttp.web.run_app(app, port=os.getenv('PORT', 8000))
