@@ -25,6 +25,11 @@ SENDER_PASS: typing.Optional[str] = None
 
 
 class Parser:
+    def __init__(self, date_column, columns=4):
+        self.date_column = date_column
+        self.columns = columns
+        self.counter = 0
+
     def parse_table(self, html):
         """fetch table from https://tickets.pfcsochi.ru/"""
         bs = BeautifulSoup(html, 'html.parser')
@@ -32,15 +37,15 @@ class Parser:
         return zip(*[map(
             self._fetch_from_elem,
             table.find_all('td')
-        )] * 4)
+        )] * self.columns)
 
-    @staticmethod
-    def _fetch_from_elem(elem):
+    def _fetch_from_elem(self, elem):
+        self.counter = (self.counter + 1) % self.columns
         if elem.a:
             return elem.a.get('href').split('/')[-1]
-        try:
+        if self.date_column == self.counter:
             return dateparser.parse(elem.text).timestamp()
-        except Exception:
+        else:
             return elem.text
 
 
@@ -126,22 +131,23 @@ async def sign_in(request: aiohttp.web.Request):
     data = await read_from_request(request)
     try:
         login, pwd = data['login'], data['pwd']
-        pwd = hashlib.sha256(pwd.encode()).hexdigest()
-        async with db.acquire() as conn:
-            res = await conn.execute('''
-                select count(*) from app_user
-                where login=%s and pwd=%s
-            ''', (login, pwd))
-            res = await res.fetchone()
-            if res[0] == 1:
-                return aiohttp.web.Response(status=200)
-            elif res[0] > 1:
-                return aiohttp.web.HTTPInternalServerError()
-            else:
-                return aiohttp.web.HTTPNotFound()
     except KeyError as e:
         print(f'{e} not found in {data} ({await request.read()})')
         return aiohttp.web.Response(status=400)
+
+    pwd = hashlib.sha256(pwd.encode()).hexdigest()
+    async with db.acquire() as conn:
+        res = await conn.execute('''
+            select count(*) from app_user
+            where login=%s and pwd=%s
+        ''', (login, pwd))
+        res = await res.fetchone()
+        if res[0] == 1:
+            return aiohttp.web.Response(status=200)
+        elif res[0] > 1:
+            return aiohttp.web.HTTPInternalServerError()
+        else:
+            return aiohttp.web.HTTPNotFound()
 
 
 def init():
@@ -156,7 +162,19 @@ async def events_handler(request: aiohttp.web.Request):
         async with sess.get('https://tickets.pfcsochi.ru/') as resp:
             html = await resp.read()
     return aiohttp.web.json_response({
-        'result': list(Parser().parse_table(html)),
+        'result': list(Parser(2).parse_table(html)),
+    })
+
+
+async def sectors_handler(request: aiohttp.web.Request):
+    ev = request.match_info['event']
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get(
+                f'https://tickets.pfcsochi.ru/view-available-zones/{ev}'
+        ) as resp:
+            html = await resp.read()
+    return aiohttp.web.json_response({
+        'result': list(Parser(-1).parse_table(html)),
     })
 
 
@@ -169,5 +187,6 @@ if __name__ == '__main__':
         aiohttp.web.post('/sign-up/code', auth_code_handler),
         aiohttp.web.post('/sign-in', sign_in),
         aiohttp.web.get('/events', events_handler),
+        aiohttp.web.get(r'/events/{event:\d+}', sectors_handler),
     ])
     aiohttp.web.run_app(app, port=os.getenv('PORT', 8000))
