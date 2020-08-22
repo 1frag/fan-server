@@ -156,7 +156,7 @@ async def events_handler(request: aiohttp.web.Request):
         async with sess.get('https://tickets.pfcsochi.ru/') as resp:
             html = await resp.read()
     return aiohttp.web.json_response({
-        'result': Parser().parse_table(html),
+        'result': list(Parser().parse_table(html)),
     })
 
 
