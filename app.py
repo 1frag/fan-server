@@ -259,15 +259,22 @@ async def performance_handler(request: aiohttp.web.Request):
 async def whoami_handler(request: aiohttp.web.Request):
     token = get_token(request)
     async with db.acquire() as conn:
-        res = await (await conn.execute('''
+        who = await (await conn.execute('''
             select login, email from app_user
             where token = %s
         ''', (token, ))).fetchone()
-    if res is None:
-        return aiohttp.web.HTTPUnauthorized()
+        if who is None:
+            return aiohttp.web.HTTPUnauthorized()
+        where = await (await conn.execute('''
+            select tp.game, tp.sector,
+                   tp.trow, tp.place from app_taken_place tp
+            inner join app_user u on u.id = tp.user_id
+            where u.token = %s
+        ''', (token, ))).fetchall()
     return aiohttp.web.json_response({
-        'email': res['email'],
-        'login': res['login'],
+        'email': who['email'],
+        'login': who['login'],
+        'where': [dict(w) for w in where],
     })
 
 
