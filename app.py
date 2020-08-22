@@ -168,7 +168,7 @@ async def sign_in(request: aiohttp.web.Request):
             })
         elif len(res) == 1:
             return aiohttp.web.Response(status=403)
-        elif res[0] > 1:
+        elif len(res) > 1:
             return aiohttp.web.HTTPInternalServerError()
         else:
             return aiohttp.web.HTTPNotFound()
