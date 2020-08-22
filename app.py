@@ -39,7 +39,7 @@ class Parser:
 
 
 async def read_from_request(request):
-    t = await request.read()
+    t = (await request.read()).decode()
     print(t)
     return yarl.URL(f'http://site.com/abc/?{t}').query
 
