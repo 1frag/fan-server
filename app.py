@@ -89,7 +89,7 @@ async def sign_up(request: aiohttp.web.Request):
         session.sendmail(SENDER_ADDRESS, email, text)
         session.quit()
     asyncio.ensure_future(send_email())
-    return aiohttp.web.Request(status=200)
+    return aiohttp.web.Response(status=200)
 
 
 async def auth_code_handler(request: aiohttp.web.Request):
