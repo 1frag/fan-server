@@ -72,7 +72,7 @@ async def sign_up(request: aiohttp.web.Request):
     data = await read_from_request(request)
     login, pwd, email = data['login'], data['pwd'], data['email']
     custom_id = data['id']
-    pwd = hashlib.sha256(pwd.encode())
+    pwd = hashlib.sha256(pwd.encode()).hexdigest()
     code = random.randint(10 ** 6, 10 ** 7)
     async with db.acquire() as conn:
         try:
