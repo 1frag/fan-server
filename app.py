@@ -17,6 +17,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import psycopg2
 import psycopg2.errors
+import re
 
 db: typing.Optional[aiopg.sa.engine.Engine] = None
 thread_pool: typing.Optional[concurrent.futures.ThreadPoolExecutor] = None
@@ -29,17 +30,18 @@ class Parser:
         self.date_column = date_column
         self.columns = columns
         self.counter = 0
+        self.re_for_name = re.compile(r'Ряд (\d+) Место (\d+)')
 
     def parse_table(self, html):
         """fetch table from https://tickets.pfcsochi.ru/"""
         bs = BeautifulSoup(html, 'html.parser')
         table = bs.find('table', class_='tickets__list')
         return zip(*[map(
-            self._fetch_from_elem,
+            self._fetch_from_td,
             table.find_all('td')
         )] * self.columns)
 
-    def _fetch_from_elem(self, elem):
+    def _fetch_from_td(self, elem):
         self.counter = (self.counter + 1) % self.columns
         if elem.a:
             return elem.a.get('href').split('/')[-1]
@@ -47,6 +49,19 @@ class Parser:
             return dateparser.parse(elem.text).timestamp()
         else:
             return elem.text
+
+    def parse_places(self, html):
+        bs = BeautifulSoup(html, 'html.parser')
+        scr = bs.find_all('script')[8]
+        for line in str(scr).split('\n'):
+            if 'CORE.data.seats' in line:
+                line = line.replace('CORE.data.seats = ', '')
+                lst = json.loads(line[:-1])
+                for obj in lst:
+                    if m := self.re_for_name.search(obj['name']):
+                        yield m[1], m[2]
+                return
+        raise KeyError
 
 
 async def read_from_request(request):
@@ -187,6 +202,19 @@ async def sectors_handler(request: aiohttp.web.Request):
     })
 
 
+async def place_handler(request: aiohttp.web.Request):
+    ev = request.match_info['event']
+    se = request.match_info['sector']
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get(
+                f'https://tickets.pfcsochi.ru/choose-seats/{ev}/{se}'
+        ) as resp:
+            html = await resp.read()
+    return aiohttp.web.json_response({
+        'result': list(Parser(-1).parse_places(html)),
+    })
+
+
 if __name__ == '__main__':
     init()
     app = aiohttp.web.Application()
@@ -197,5 +225,6 @@ if __name__ == '__main__':
         aiohttp.web.post('/sign-in', sign_in),
         aiohttp.web.get('/events', events_handler),
         aiohttp.web.get(r'/events/{event:\d+}', sectors_handler),
+        aiohttp.web.get(r'/events/{event:\d+}/{sector:\d+}', place_handler),
     ])
     aiohttp.web.run_app(app, port=os.getenv('PORT', 8000))
