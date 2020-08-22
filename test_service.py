@@ -14,7 +14,7 @@ async def test_that_check_parsing_games():
     p = app.Parser()
     result = list(p.parse_table(content))
     assert result == [
-        ['СОЧИ - УРАЛ', '30 августа 2020, 20:00 (вс)', 'Стадион Фишт', TICKET_PAGE],
+        ('СОЧИ - УРАЛ', 1598792400.0, 'Стадион Фишт', '90'),
     ]
 
 

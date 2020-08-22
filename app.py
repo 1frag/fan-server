@@ -133,9 +133,9 @@ async def sign_in(request: aiohttp.web.Request):
                 where login=%s and pwd=%s
             ''', (login, pwd))
             res = await res.fetchone()
-            if res == 1:
+            if res[1] == 1:
                 return aiohttp.web.Response(status=200)
-            elif res > 1:
+            elif res[1] > 1:
                 return aiohttp.web.HTTPInternalServerError()
             else:
                 return aiohttp.web.HTTPNotFound()
@@ -152,7 +152,12 @@ def init():
 
 
 async def events_handler(request: aiohttp.web.Request):
-    pass
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get('https://tickets.pfcsochi.ru/') as resp:
+            html = await resp.read()
+    return aiohttp.web.json_response({
+        'result': Parser().parse_table(html),
+    })
 
 
 if __name__ == '__main__':
