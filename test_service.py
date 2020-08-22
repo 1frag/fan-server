@@ -12,10 +12,8 @@ async def test_that_check_parsing_games():
         async with sess.get(GAMES_PAGE) as resp:
             content = await resp.read()
     p = app.Parser()
-    result = list(p.parse_page(content))
-    # todo: web:: get мероприятия
+    result = list(p.parse_table(content))
     assert result == [
-        ['Мероприятие', 'Дата проведения', 'Место проведения', ''],
         ['СОЧИ - УРАЛ', '30 августа 2020, 20:00 (вс)', 'Стадион Фишт', TICKET_PAGE],
     ]
 
@@ -25,5 +23,5 @@ async def test_that_check_parsing_tickets():
         async with sess.get(TICKET_PAGE) as resp:
             content = await resp.read()
     p = app.Parser()
-    result = list(p.parse_page(content))
+    result = list(p.parse_table(content))
     assert result == []
