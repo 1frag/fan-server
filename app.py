@@ -164,7 +164,8 @@ async def sign_in(request: aiohttp.web.Request):
                     update app_user
                     set token = %s
                     where id = %s
-                ''', (token, id_)))
+                    returning token;
+                ''', (token, id_))).fetchone()[0]
             })
         elif len(res) == 1:
             return aiohttp.web.Response(status=403)
