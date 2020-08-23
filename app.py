@@ -89,7 +89,7 @@ async def database(_):
     await db.wait_closed()
 
 
-async def sign_up(request: aiohttp.web.Request):
+async def sign_up(request: 'FanRequest'):
     data = await read_from_request(request)
     login, pwd, email = data['login'], data['pwd'], data['email']
     custom_id = data['id']
@@ -125,7 +125,7 @@ async def sign_up(request: aiohttp.web.Request):
     return aiohttp.web.Response(status=200)
 
 
-async def auth_code_handler(request: aiohttp.web.Request):
+async def auth_code_handler(request: 'FanRequest'):
     data = await read_from_request(request)
     async with db.acquire() as conn:
         res = await conn.execute('''
@@ -143,7 +143,7 @@ async def auth_code_handler(request: aiohttp.web.Request):
     return aiohttp.web.Response(status=200)
 
 
-async def sign_in(request: aiohttp.web.Request):
+async def sign_in(request: 'FanRequest'):
     data = await read_from_request(request)
     try:
         login, pwd = data['login'], data['pwd']
@@ -183,7 +183,7 @@ def init():
     SENDER_PASS = os.getenv('SENDER_PASS')
 
 
-async def events_handler(request: aiohttp.web.Request):
+async def events_handler(request: 'FanRequest'):
     async with aiohttp.ClientSession() as sess:
         async with sess.get('https://tickets.pfcsochi.ru/') as resp:
             html = await resp.read()
@@ -192,7 +192,7 @@ async def events_handler(request: aiohttp.web.Request):
     })
 
 
-async def sectors_handler(request: aiohttp.web.Request):
+async def sectors_handler(request: 'FanRequest'):
     ev = request.match_info['event']
     async with aiohttp.ClientSession() as sess:
         async with sess.get(
@@ -204,7 +204,7 @@ async def sectors_handler(request: aiohttp.web.Request):
     })
 
 
-async def place_handler(request: aiohttp.web.Request):
+async def place_handler(request: 'FanRequest'):
     ev = request.match_info['event']
     se = request.match_info['sector']
     async with aiohttp.ClientSession() as sess:
@@ -221,7 +221,7 @@ def get_token(request):
     return request.headers['Authorization'][7:]
 
 
-async def new_ticket_handler(request: aiohttp.web.Request):
+async def new_ticket_handler(request: 'FanRequest'):
     data = await read_from_request(request)
     print(request.headers, data)
     token = get_token(request)
@@ -244,19 +244,32 @@ async def new_ticket_handler(request: aiohttp.web.Request):
     return aiohttp.web.Response(status=200)
 
 
-async def performance_handler(request: aiohttp.web.Request):
+async def performance_handler(request: 'FanRequest'):
     async with db.acquire() as conn:
         res = await (await conn.execute('''
             select get_user_id_by_token(%s)
         ''', (get_token(request), ))).fetchone()
         if not res:
             return aiohttp.web.HTTPUnauthorized()
+    actions = [
+        {
+            'when': request.app.time_to_turn_on_lantern,
+            'cmd': 'turn-on-your-lamp',
+        }, {
+            'when': request.app.time_to_say_smth,
+            'cmd': 'say-this',
+            'what': request.app.what_need_to_say,
+        }, {
+            'cmd': 'put-on',
+            'what': 'Синюю майку',
+        }
+    ]
     return aiohttp.web.json_response({
-        'result': [time.time() + 60, 'be happy']
-    })  # statiое дата и описание
+        'result': actions,
+    })
 
 
-async def whoami_handler(request: aiohttp.web.Request):
+async def whoami_handler(request: 'FanRequest'):
     token = get_token(request)
     async with db.acquire() as conn:
         who = await (await conn.execute('''
@@ -278,9 +291,51 @@ async def whoami_handler(request: aiohttp.web.Request):
     })
 
 
-if __name__ == '__main__':
+async def managing_for_lantern(app: 'FanApplication'):
+    """ This function need to update time when lantern must turn on
+        for presentation purpose we active it always, even if the event
+        not started yet. The main idea is managing for lanterns
+    """  # todo: function like this must use asyncio.locks
+    while True:
+        app.time_to_turn_on_lantern = time.time() + 60
+        await asyncio.sleep(60)
+
+
+async def managing_for_chants(app: 'FanApplication'):
+    while True:
+        app.time_to_say_smth = time.time() + 35
+        app.what_need_to_say = [
+            'Хакатон, урааа!',  # 1
+            'Сочи, вперёд!',  # 2
+            'Это кто там? - это Сочи!!!\n'  # 3
+            'Всех соперников замочим!\n'
+            'Не реви противник наш,\n'
+            'МЫ дадим тебе лаваш!\n'
+            '"Ну а если заревешь, -\n'
+            'в ШАУРМЕ домой пойдешь ! "',
+            'Судью на мыло!',  # 4
+        ]
+        await asyncio.sleep(35)
+
+
+class FanApplication(aiohttp.web.Application):
+    time_to_turn_on_lantern: int
+    time_to_say_smth: int
+    what_need_to_say: str
+
+
+class FanRequest(aiohttp.web.Request):
+    app: FanApplication
+
+
+def main():
     init()
-    app = aiohttp.web.Application()
+    app = FanApplication()
+    # now functions managing_* looks very simple
+    #  but in future they can be different modules etc.
+    #  so I wont merge they to single small function
+    asyncio.ensure_future(managing_for_lantern(app))
+    asyncio.ensure_future(managing_for_chants(app))
     app.cleanup_ctx.append(database)
     app.add_routes([
         aiohttp.web.post('/sign-up', sign_up),
@@ -294,3 +349,7 @@ if __name__ == '__main__':
         aiohttp.web.get('/whoami', whoami_handler),
     ])
     aiohttp.web.run_app(app, port=os.getenv('PORT', 8000))
+
+
+if __name__ == '__main__':
+    main()
